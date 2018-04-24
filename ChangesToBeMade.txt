@@ -1,0 +1,125 @@
+
+//MATLAB code for Power Optimization 
+
+function D  = MPPT(VPV,IPV,VO,IO)
+%#codegen
+
+persistent Start Shift Track Hold PPV Count Delta Climb Prev Dper MAX Stable Forward
+
+//1's and 0's in Start, Track, Hold and Shift are boolean values
+if isempty(Start)
+    Start=1;
+    Track=1; //Track determines when Voltage and Current are stable enough to determine when to initialize optimization
+    Shift=0; //Here is where Newton Raphson will be implemented
+    Hold=0; //Hold is for keeping the actual values for Voltage and Current so Power keeps being optimal
+    Count=0;
+    PPV=0;
+    Delta=.2;
+    Climb=1;
+    Prev=0;
+    Dper=0.5;
+    MAX=0;
+    Stable=0;
+    Forward=0;
+end 
+
+if Start
+    Start=0;
+end
+
+//Currently, a bisection algorithm is being used... but the slope between points "Stable" and "PPV" will be calculated each iteration
+//so if the slope = 0, then the maximum value of Voltage has been found so that Power is optimal
+if Shift
+    Prev=0; 
+    if PPV<Stable //PPV is Voltage
+        Forward=0;
+        Climb=Climb*-1;
+        Delta=Delta/2;
+    else
+        Forward=Forward+1;
+    end
+    if Forward>=10
+        Delta=.2;
+        Forward=0;
+    end
+    Stable=PPV;
+    
+    if Dper >= 1
+        Climb=-1;
+        Delta=Delta/2;
+    end
+    if Dper <= 0
+        Climb=1;
+        Delta=Delta/2;
+    end
+    
+    Dper=Dper+Climb*Delta;
+    
+    if Dper >= 1
+        Dper=1;
+    end
+    if Dper <= 0
+        Dper=0;
+    end
+    
+    Shift=0;
+    Track=1;
+    if Delta<=0.001
+        Hold=1;
+        Shift=0;
+        Track=0;
+        MAX=PPV;
+        Count=0;
+        PPV=0;
+    end
+    if Track
+        PPV=0;
+    end
+end
+
+//As it is, Track records two sets of 5 points and determines if values have stabilized
+//It will be changed so that, using an interpolation method, the stable value is calculated.
+if Track
+    Count=Count+1;
+    PPV=PPV+VPV*IPV;
+    if Count == 5
+        Count=0;
+        PPV=PPV/5;
+        if Prev*1.01>PPV && Prev*0.99<PPV
+            Track=0;
+            Shift=1;
+        end
+        Prev=PPV;
+        if ~Shift
+            PPV=0;
+        end
+    end
+end
+
+if Hold
+    Count=Count+1;
+    PPV=PPV+VPV*IPV;
+    if Count == 5
+        Count=0;
+        PPV=PPV/5;
+        if PPV>MAX*1.05 || PPV<MAX*0.95
+            Delta=0.2;
+            Track=1;
+            Hold=0;
+        end 
+        PPV=0;
+    end
+end
+D=Dper;
+%Debugging Variables
+%State=Hold+Track*2+Shift*4+Start*8;
+%Max=PPV;
+%count=Count;
+%Stab=Stable;
+
+
+
+
+
+ 
+
